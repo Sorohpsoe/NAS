@@ -1,0 +1,94 @@
+{
+  "AS": {
+    "AS1": {
+      "IGP": "OSPF",
+      "numero_AS": 1,
+      "client": "False",
+
+      "plage_IP": {
+        "interfaces_physique": "101.101.101.240/28",
+        "interfaces_loopback": "201.201.201.200/30"
+      },
+
+      "routeurs": ["R1", "R2", "R3", "R4"],
+      "liens": [
+        [
+          ["R1", "G1/0"],
+          ["R2", "G1/0"]
+        ],
+        [
+          ["R2", "G2/0"],
+          ["R3", "G2/0"]
+        ],
+        [
+          ["R3", "G1/0"],
+          ["R4", "G1/0"]
+        ]
+      ]
+    },
+
+    "AS2": {
+      "IGP": "OSPF",
+      "numero_AS": 2,
+      "client": "True",
+      "num_client" : "A",
+
+      "routeurs": ["R5"],
+
+      "liens": []
+    },
+
+    "AS3": {
+      "IGP": "OSPF",
+      "numero_AS": 3,
+      "client": "True",
+      "num_client" : "A",
+      "routeurs": ["R6"],
+
+      "liens": []
+    },
+
+    "AS4": {
+      "IGP": "OSPF",
+      "numero_AS": 4,
+      "client": "True",
+      "num_client" : "B",
+      "routeurs": ["R7"],
+
+      "liens": []
+    },
+
+    "AS5": {
+      "IGP": "OSPF",
+      "numero_AS": 5,
+      "client": "True",
+      "num_client" : "B",
+      "routeurs": ["R8"],
+
+      "liens": []
+    }
+  },
+
+  "liens_MPLS": [
+    {
+      "routeur": ["R5", "G3/0"],
+      "connecte a": ["R1", "G3/0"],
+      "ip": "192.168.101.100/30"
+    },
+    {
+      "routeur": ["R6", "G4/0"],
+      "connecte a": ["R1", "G4/0"],
+      "ip": "192.168.102.100/30"
+    },
+    {
+      "routeur": ["R7", "G3/0"],
+      "connecte a": ["R4", "G3/0"],
+      "ip": "192.168.103.100/30"
+    },
+    {
+      "routeur": ["R8", "G4/0"],
+      "connecte a": ["R4", "G4/0"],
+      "ip": "192.168.104.100/30"
+    }
+  ]
+}
