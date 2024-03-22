@@ -225,17 +225,28 @@ def conf_interface(routeur,interface,IGP,adresse,fowarding=None):
     if interface!="Loopback0":
         texte+="""negotiation auto
  mpls ip"""
-
-
-
-
+ 
 
     #Envoi des commande avec telnet
 
     commande("conf t",routeur)
     commande(f"interface {interface}",routeur)
-    commande(f"ipv6 enable",routeur)
-    commande(f"ipv6 address {adresse}",routeur)
+    if fowarding != None :
+        commande(f"vrf forwarding {fowarding}",routeur)
+
+    commande(f"ip address {adresse} {subnet_mask}",routeur)
+
+    if forwarding == None :
+        commande(f"ip ospf {routeur[1:]} area 0",routeur)
+
+    if interface != "Loopback0" :
+        commande("negotiation auto",routeur)
+        commande("mpls ip",routeur)
+
+    commande("no shutdown",routeur)
+
+
+
 
     if IGP == "RIP" :
         commande(f"ipv6 rip connected enable",routeur)
