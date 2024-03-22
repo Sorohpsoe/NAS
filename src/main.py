@@ -76,8 +76,6 @@ def lister_routers(repertoire_projet) :
         
 def adressage(data):
     
-
-
     for AS in data["AS"]:
         if data["AS"][AS]["client"] == "False" :
     
@@ -118,6 +116,7 @@ def adressage(data):
 
 
 def recherche_bordures(data) :
+    
     for MPLS in data["liens_MPLS"] :
         MPLS["routeur"][1] ="GigabitEthernet"+MPLS["routeur"][1][1:]
 
