@@ -116,7 +116,7 @@ def adressage(data):
 
 
 def recherche_bordures(data) :
-    
+
     for MPLS in data["liens_MPLS"] :
         MPLS["routeur"][1] ="GigabitEthernet"+MPLS["routeur"][1][1:]
 
@@ -205,19 +205,19 @@ multilink bundle-name authenticated
         fichier.write(config)
 
         
-def conf_interface(routeur,interface,IGP,adresse,fowarding=None):
+def conf_interface(routeur,interface,IGP,adresse,forwarding=None):
 
     # Créer la configuration d'une interface 
     subnet = ipaddress.ip_network(adresse)
     subnet_mask = str(subnet.netmask)
 
     texte = f"""\ninterface {interface}"""
-    if fowarding != None :
-        texte += f"""vrf forwarding {fowarding}"""
+    if forwarding != None :
+        texte += f"""vrf forwarding {forwarding}"""
 
     texte +="""ip address {adresse} {subnet_mask}"""
 
-    if fowarding == None :
+    if forwarding == None :
         texte+=f"\n ip ospf {routeur[1:]} area 0\n!"
 
 
@@ -230,8 +230,8 @@ def conf_interface(routeur,interface,IGP,adresse,fowarding=None):
 
     commande("conf t",routeur)
     commande(f"interface {interface}",routeur)
-    if fowarding != None :
-        commande(f"vrf forwarding {fowarding}",routeur)
+    if forwarding != None :
+        commande(f"vrf forwarding {forwarding}",routeur)
 
     commande(f"ip address {adresse} {subnet_mask}",routeur)
 
