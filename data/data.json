@@ -24,7 +24,13 @@
           ["R3", "G1/0"],
           ["R4", "G1/0"]
         ]
-      ]
+      ],
+      "voisins":{
+        "AS2": "A",
+        "AS3": "A",
+        "AS4": "B",
+        "AS5": "B"
+      }
     },
 
     "AS2": {
@@ -42,7 +48,7 @@
       "IGP": "OSPF",
       "numero_AS": 3,
       "client": "True",
-      "num_client" : "A",
+      "num_client" : "B",
       "routeurs": ["R6"],
 
       "liens": []
@@ -62,7 +68,7 @@
       "IGP": "OSPF",
       "numero_AS": 5,
       "client": "True",
-      "num_client" : "B",
+      "num_client" : "A",
       "routeurs": ["R8"],
 
       "liens": []
@@ -71,24 +77,21 @@
 
   "liens_MPLS": [
     {
-      "routeur": ["R5", "G3/0"],
-      "connecte a": ["R1", "G3/0"],
-      "ip": "192.168.101.100/30"
+      "client": ["R5", "G3/0","192.168.1.1"],
+      "fournisseur": ["R1", "G3/0","192.168.1.2"]
     },
     {
-      "routeur": ["R6", "G4/0"],
-      "connecte a": ["R1", "G4/0"],
-      "ip": "192.168.102.100/30"
+      "client": ["R6", "G4/0","192.168.2.1"],
+      "fournisseur": ["R1", "G4/0","192.168.2.2"]
+
     },
     {
-      "routeur": ["R7", "G3/0"],
-      "connecte a": ["R4", "G3/0"],
-      "ip": "192.168.103.100/30"
+      "client": ["R7", "G3/0","192.168.1.1"],
+      "fournisseur": ["R4", "G3/0","192.168.1.2"]
     },
     {
-      "routeur": ["R8", "G4/0"],
-      "connecte a": ["R4", "G4/0"],
-      "ip": "192.168.104.100/30"
+      "client": ["R8", "G4/0","192.168.2.1"],
+      "fournisseur": ["R4", "G4/0","192.168.2.2"]
     }
   ]
 }

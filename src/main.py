@@ -118,7 +118,8 @@ def adressage(data):
 def recherche_bordures(data) :
 
     for MPLS in data["liens_MPLS"] :
-        MPLS["routeur"][1] ="GigabitEthernet"+MPLS["routeur"][1][1:]
+        MPLS["client"][1] ="GigabitEthernet"+MPLS["client"][1][1:]
+        MPLS["fournisseur"][1] ="GigabitEthernet"+MPLS["fournisseur"][1][1:]
 
 
     for AS in data["AS"] :
@@ -132,10 +133,10 @@ def recherche_bordures(data) :
             for MPLS in data["liens_MPLS"] :
 
                 
-                if router == MPLS["routeur"][0] :
+                if router == MPLS["client"][0] :
                     new_routeurs.append({"nom":router,"etat":"bordure"})
                     bordure = True
-                elif not bordure and router == MPLS["connecte a"][0] :
+                elif not bordure and router == MPLS["fournisseur"][0] :
                     new_routeurs.append({"nom":router,"etat":"bordure"})
                     bordure = True
             
@@ -210,22 +211,25 @@ def conf_interface(routeur,interface,IGP,adresse,forwarding=None):
     # Créer la configuration d'une interface 
     subnet = ipaddress.ip_network(adresse)
     subnet_mask = str(subnet.netmask)
-
+    print(forwarding)
     texte = f"""\ninterface {interface}"""
     if forwarding != None :
-        texte += f"""vrf forwarding {forwarding}"""
+        texte += f"""\nvrf forwarding {forwarding}"""
 
-    texte +="""ip address {adresse} {subnet_mask}"""
+    texte +=f"""\n ip address {adresse} {subnet_mask}"""
 
     if forwarding == None :
-        texte+=f"\n ip ospf {routeur[1:]} area 0\n!"
+        texte+=f"\n ip ospf {routeur[1:]} area 0\n"
 
 
+
+
+    #A changer
     if interface!="Loopback0":
-        texte+="""negotiation auto
+        texte+=""" \n negotiation auto
  mpls ip"""
  
-
+    texte += "\n!"
     #Envoi des commande avec telnet
 
     commande("conf t",routeur)
@@ -265,74 +269,44 @@ def conf_interface(routeur,interface,IGP,adresse,forwarding=None):
 
 
 
-def conf_bgp(nom_routeur,AS,loopbacks_voisin,plages,adresses_bordures):
+def conf_vpn(nom_routeur,AS,loopbacks_voisin,clients):
 
     texte_routeur = f"""\nrouter bgp {AS}
  bgp router-id {nom_routeur[1:]}.{nom_routeur[1:]}.{nom_routeur[1:]}.{nom_routeur[1:]}
- bgp log-neighbor-changes
- no bgp default ipv4-unicast"""
-    texte_family=f"""\naddress-family ipv6"""
-    for plage in plages :
-        texte_family+=f"""\n  network {plage} route-map SET_OWN"""
+ bgp log-neighbor-changes"""
+    
+    texte_family=f"""\naddress-family ipv4"""
+
+    texte_vpn ="""\n address-family vpnv4"""
+
+    texte_client =""
+
+
+    for client in clients : 
+        texte_client += f"""\n address-family ipv4 vrf {client[2]}
+   neighbor {client[0]} remote-as {client[1]}
+   neighbor {client[0]} activate
+   exit-address-family
+!"""
     
     
     for adresse in loopbacks_voisin:
+
         texte_routeur+=f"""\n neighbor {adresse[:-4]} remote-as {AS}
  neighbor {adresse[:-4]} update-source Loopback0"""
+        
         texte_family+=f"""\n  neighbor {adresse[:-4]} activate"""
-        texte_family+=f"""\n  neighbor {adresse[:-4]} send-community"""
+
+        texte_vpn += f"""
+    neighbor {adresse[:-4]} activate
+    neighbor {adresse[:-4]} send-community both
+"""
+
         
 
+    texte_family +=  "\nexit-address-family"
+    texte_vpn +=  "\nexit-address-family"
 
-    for adresse,num_AS,type in adresses_bordures:
-        texte_routeur+=f"""\n neighbor {adresse[:-3]} remote-as {num_AS}"""
-        texte_family+=f"""\n  neighbor {adresse[:-3]} activate"""
-        texte_family+=f"""\n  neighbor {adresse[:-3]} send-community"""
-        if type == "Client" :
-            texte_family+=f"""\n  neighbor {adresse[:-3]} route-map SET_CLIENT_IN in"""
-            
-        elif type == "Fournisseur" :
-            texte_family+=f"""\n  neighbor {adresse[:-3]} route-map SET_PROVIDER_IN in"""
-            texte_family+=f"""\n  neighbor {adresse[:-3]} route-map OUTWARD out"""
-        elif type=="Peer" :
-            texte_family+=f"""\n  neighbor {adresse[:-3]} route-map SET_PEER_IN in"""
-            texte_family+=f"""\n  neighbor {adresse[:-3]} route-map OUTWARD out"""
-        
-
-
-    commande("conf t",nom_routeur)
-    commande(f"router bgp {AS}",nom_routeur)
-    commande(f"bgp router-id {nom_routeur[1:]}.{nom_routeur[1:]}.{nom_routeur[1:]}.{nom_routeur[1:]}",nom_routeur)
-    commande(f"no bgp default ipv4-unicast",nom_routeur)
-    for address in loopbacks_voisin:
-        commande(f"neighbor {address[:-4]} remote-as {AS}",nom_routeur)
-        commande(f"neighbor {address[:-4]} update-source Loopback0",nom_routeur)
-    
-    for adresse,num_AS,type in adresses_bordures:
-        commande(f"neighbor {adresse[:-3]} remote-as {num_AS}",nom_routeur)
-
-    
-    commande(f"address-family ipv6 unicast",nom_routeur)
-    for plage in plages :
-        commande(f"network {plage} route-map SET_OWN",nom_routeur)
-    for adresse in loopbacks_voisin:
-        commande(f"neighbor {adresse[:-4]} activate",nom_routeur)
-        commande(f"neighbor {adresse[:-4]} send-community",nom_routeur)
-    for adresse,num_AS,type in adresses_bordures:
-        commande(f"neighbor {adresse[:-3]} activate",nom_routeur)
-        commande(f"neighbor {adresse[:-3]} send-community",nom_routeur)
-        if type == "Client" :
-            commande(f"neighbor {adresse[:-3]} route-map SET_CLIENT_IN in",nom_routeur)
-            
-        elif type == "Fournisseur" :
-            commande(f"neighbor {adresse[:-3]} route-map SET_PROVIDER_IN in",nom_routeur)
-            commande(f"neighbor {adresse[:-3]} route-map OUTWARD out",nom_routeur)
-
-        elif type=="Peer" :
-            commande(f"neighbor {adresse[:-3]} route-map SET_PEER_IN in",nom_routeur)
-            commande(f"neighbor {adresse[:-3]} route-map OUTWARD out",nom_routeur)
-           
-    commande(f"end",nom_routeur)
 
 
 
@@ -343,89 +317,9 @@ def conf_bgp(nom_routeur,AS,loopbacks_voisin,plages,adresses_bordures):
     with open(filename, 'a') as fichier:
         fichier.write(texte_routeur)
         fichier.write(texte_family)
+        fichier.write(texte_vpn)
+        fichier.write(texte_client)
     
-def set_route_map(nom_routeur):
-    texte="""!
-ip community-list 1 permit 1
-ip community-list 2 permit 2
-ip community-list 3 permit 3
-ip community-list 4 permit 4
-!
-route-map SET_CLIENT_IN permit 10
- set community 1
- set local-preference 150
-!
-route-map SET_PEER_IN permit 10
- set community 2
- set local-preference 100
-!
-route-map SET_PROVIDER_IN permit 10
- set community 3
- set local-preference 50
-!
-route-map SET_OWN permit 10
- set community 4
-!
-route-map OUTWARD permit 10
- match community 1
- match community 4
-!
-control-plane
-!
-!
-line con 0
- exec-timeout 0 0
- privilege level 15
- logging synchronous
- stopbits 1
-line aux 0
- exec-timeout 0 0
- privilege level 15
- logging synchronous
- stopbits 1
-line vty 0 4
- login
-!
-!
-end
-"""
-    commande("conf t",nom_routeur)
-    commande("ip community-list 1 permit 1",nom_routeur)
-    commande("ip community-list 2 permit 2",nom_routeur)
-    commande("ip community-list 3 permit 3",nom_routeur)
-    commande("ip community-list 4 permit 4",nom_routeur)
-    
-    commande("route-map SET_CLIENT_IN permit 10",nom_routeur)
-    commande("set community 1",nom_routeur)
-    commande("set local-preference 150",nom_routeur)
-    commande("exit",nom_routeur)
-    
-    commande("route-map SET_PEER_IN permit 10",nom_routeur)
-    commande("set community 2",nom_routeur)
-    commande("set local-preference 100",nom_routeur)
-    commande("exit",nom_routeur)
-    
-    commande("route-map SET_PROVIDER_IN permit 10",nom_routeur)
-    commande("set community 3",nom_routeur)
-    commande("set local-preference 50",nom_routeur)
-    commande("exit",nom_routeur)
-    
-    commande("route-map SET_OWN permit 10",nom_routeur)
-    commande("set community 4",nom_routeur)
-    commande("exit",nom_routeur)
-    
-    commande("route-map OUTWARD permit 10",nom_routeur)
-    commande("match community 1",nom_routeur)
-    commande("match community 4",nom_routeur)
-    commande("exit",nom_routeur)
-    
-    commande("end",nom_routeur)
-    
-    filename = os.path.join(os.path.dirname(__file__), "config_files", nom_routeur + ".cfg")
-
-    # Écrire la configuration dans le fichier spécifié
-    with open(filename, 'a') as fichier:
-        fichier.write(texte)
              
  
  
@@ -456,21 +350,6 @@ ipv6 router ospf {nom[1:]}
             texte +=f""" passive-interface {bordure}
 """
    
-    if IGP == "RIP" :
-        commande("conf t", nom)
-        commande("ipv6 router rip connected",nom)
-        commande("redistribute connected",nom)
-
-    else :
-        commande("conf t", nom)
-        commande(f"ipv6 router ospf {nom[1:]}",nom)
-        commande(f"router-id {nom[1:]}.{nom[1:]}.{nom[1:]}.{nom[1:]}",nom)
-        commande(f"passive-interface Loopback0",nom)
-
-        for bordure in bordures :
-            commande(f"passive-interface {bordure}",nom)
-
-    commande("end",nom)
 
 
 
@@ -497,12 +376,7 @@ def logic(data) :
 
     for AS in data["AS"] :
 
-        if data["AS"][AS]["client"] == "False" :
 
-            plages_addresses = []   
-            print(data["AS"][AS]["liens"])
-            for lien in data["AS"][AS]["liens"] :
-                plages_addresses.append(lien[2])
 
 
         IGP = data["AS"][AS]["IGP"]
@@ -511,36 +385,64 @@ def logic(data) :
 
             constante(routeur["nom"])
             voisins = []
-            addresses_bordures = []
+            clients = []
+            #  clients = [nom client, adresse client, AS client]
+
             interfaces_bordures = []
-            conf_interface(routeur["nom"],"Loopback0",IGP,routeur["Loopback0"])
+
+            if data["AS"][AS]["client"] == "False" :
+                conf_interface(routeur["nom"],"Loopback0",IGP,routeur["Loopback0"])
 
             for bordures in data["liens_MPLS"] :
                 for bordure in bordures :
+
                     if bordures[bordure][0] == routeur["nom"] :
-                        conf_interface(routeur["nom"],bordures[bordure][1],IGP,bordures[bordure][2])
+
+
+
 
                         interfaces_bordures.append(bordures[bordure][1])    
 
-                        if bordure == "routeur" :
-                            j = "connecte a"
+                        if bordure == "client" :
+                            j = "fournisseur"
                         else : 
-                            j = "routeur"
+                            j = "client"
 
-                        voisin = [bordures[j][2]]
-                        for AS_bordure in data["AS"] :
-                            for routeur_bordure in data["AS"][AS_bordure]["routeurs"] :
-                                if routeur_bordure["nom"] == bordures[j][0] :
-                                    num_AS = AS_bordure[2:]
-                                    voisin.append(num_AS)
+
+                        nom_autre = None
+                        if data["AS"][AS]["client"] == "False" :
+                            nom_autre = bordures[j][0]
+                            for AS_autre in data["AS"] :
+                                for routeur_autre in data["AS"][AS_autre]["routeurs"] :
+                                    if routeur_autre["nom"] == nom_autre :
+
+                                        nom_vpn = data["AS"][AS_autre]["num_client"]
+
                         
-                        for AS_voisin in data["AS"][AS]["voisins"] :
-                            if AS_voisin[2:] == num_AS :
-                                voisin.append(data["AS"][AS]["voisins"][AS_voisin])
+
+                        if data["AS"][AS]["client"] == "False" :
+
+                            voisin = [bordures[j][2]]
+                            for AS_bordure in data["AS"] :
+                                for routeur_bordure in data["AS"][AS_bordure]["routeurs"] :
+                                    if routeur_bordure["nom"] == bordures[j][0] :
+                                        num_AS = AS_bordure[2:]
+                                        voisin.append(num_AS)
+
+
+                            if data["AS"][AS]["client"] == "False" :
+    
+                                for AS_voisin in data["AS"][AS]["voisins"] :
+                                    if AS_voisin[2:] == num_AS :
+                                        voisin.append(data["AS"][AS]["voisins"][AS_voisin])
+
+                        conf_interface(routeur["nom"],bordures[bordure][1],IGP,bordures[bordure][2],nom_vpn)
+
+
+                            
                         
                         
-                        
-                        addresses_bordures.append(voisin)
+
 
             for lien in data["AS"][AS]["liens"] :
                 for routeur_in_lien in lien :
@@ -555,17 +457,19 @@ def logic(data) :
             
             loopback_voisins = []
 
-            for voisin in data["AS"][AS]["routeurs"] :
-                if voisin["nom"] in voisins :
-                    loopback_voisins.append(voisin["Loopback0"])
+            for voisin_lb in data["AS"][AS]["routeurs"] :
+                if voisin_lb["nom"] in voisins :
+                    loopback_voisins.append(voisin_lb["Loopback0"])
            
+
             
-            conf_bgp(routeur["nom"],AS[2:],loopback_voisins,plages_addresses,addresses_bordures)
+
 
             conf_igp(routeur["nom"],IGP,interfaces_bordures)
             
+            conf_vpn(routeur["nom"],AS[2:],loopback_voisins,clients)
             
-            set_route_map(routeur["nom"])
+            
 
 def adressage_auto(plage, nb_lien):
     plages = []
@@ -575,8 +479,8 @@ def adressage_auto(plage, nb_lien):
     if subnet_size >= nb_lien * 4:
         for i in range(nb_lien):
 
-            IP1 = str(subnet.network_address + i * 4 + 1) + "/30"
-            IP2 = str(subnet.network_address + i * 4 + 2) + "/30"
+            IP1 = str(subnet.network_address + i * 4 + 4) + "/30"
+            IP2 = str(subnet.network_address + i * 4 + 8) + "/30"
 
             plages.append([IP1,IP2])
 
@@ -629,7 +533,7 @@ def commande(cmd,routeur) :
 
 
 repertoire_projet = "C:\\Users\\Gauthier\\GNS3\\projects\\GNS3_project1"
-json_file = "C:\\Users\\Gauthier\\Documents\\NAS\\NAS\\data\\data.json"
+json_file = "C:\\Users\\Gauthier\\Desktop\\TC\\TC3\\PROJETS_S2\\NAS\\NAS\\data\\data.json"
 project_name = os.path.basename(repertoire_projet)
 
 intentions = load_data(json_file)
