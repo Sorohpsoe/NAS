@@ -520,7 +520,7 @@ def logic(data) :
                         else : 
                             conf_interface(routeur["nom"],bordures[bordure][1],IGP,bordures[bordure][2])
 
-                            loopback_voisins.append(bordures[j][2])
+                            loopback_voisins.append(bordures[j][2]+"/32")
 
 
 
