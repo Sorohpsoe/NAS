@@ -500,7 +500,7 @@ def logic(data) :
 
             else : 
 
-                conf_interface(routeur["nom"],"GigabitEthernet1/0",IGP,data["AS"][AS]["addresse"])
+                conf_interface(routeur["nom"],"GigabitEthernet1/0",IGP,data["AS"][AS]["addresse"][:-3])
 
             loopback_voisins = []
 
