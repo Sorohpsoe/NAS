@@ -41,6 +41,8 @@
 
       "routeurs": ["R5"],
 
+      "addresse" :"192.168.3.1/30",
+
       "liens": []
     },
 
@@ -50,7 +52,7 @@
       "client": "True",
       "num_client" : "B",
       "routeurs": ["R6"],
-
+      "addresse" :"192.168.3.5/30",
       "liens": []
     },
 
@@ -60,6 +62,7 @@
       "client": "True",
       "num_client" : "B",
       "routeurs": ["R7"],
+      "addresse" :"192.168.3.9/30",
 
       "liens": []
     },
@@ -70,7 +73,7 @@
       "client": "True",
       "num_client" : "A",
       "routeurs": ["R8"],
-
+      "addresse" :"192.168.3.13/30",
       "liens": []
     }
   },

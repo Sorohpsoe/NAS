@@ -75,7 +75,9 @@ def lister_routers(repertoire_projet) :
     return routers_list
         
 def adressage(data):
-    
+
+    index = 0
+
     for AS in data["AS"]:
         if data["AS"][AS]["client"] == "False" :
     
@@ -84,10 +86,11 @@ def adressage(data):
 
             adresses_physiques = adressage_auto(adresse,nombre_liens)
 
+
             # Créer une plage d'adresses pour chaque lien
             for i in range(nombre_liens):
                 
-                data["AS"][AS]["liens"][i].append(adresses_physiques[i])
+
 
                 for j in range(2) :
 
@@ -113,6 +116,25 @@ def adressage(data):
 
             for i in range(nb_routeurs) :
                 data["AS"][AS]["routeurs"][i]["Loopback0"] = adresses_loopback[i]
+        
+        else :
+        
+            for AS_autre in data["AS"] :
+
+                if data["AS"][AS_autre]["client"] == "True" :
+
+                    if data["AS"][AS_autre]["num_client"] == data["AS"][AS]["num_client"] :
+
+                        
+                        if "rt" in data["AS"][AS_autre].keys() :
+                            data["AS"][AS]["rt"] = data["AS"][AS_autre]["rt"]
+                            data["AS"][AS]["rd"] = data["AS"][AS_autre]["rd"]
+                        else :
+                            index += 1
+                            data["AS"][AS]["rd"] = index
+                            index += 1
+                            data["AS"][AS]["rt"] = index
+
 
 
 def recherche_bordures(data) :
@@ -163,27 +185,7 @@ boot-start-marker
 boot-end-marker
 !
 !
-vrf definition Client_A
- rd 100:110
- !
- address-family ipv4
- exit-address-family
-!
-!
-no aaa new-model
-no ip icmp rate-limit unreachable
-ip cef
-!
-!
-!
-!
-!
-!
-no ip domain lookup
-no ipv6 cef
-!
-!
-multilink bundle-name authenticated
+
 !"""
 
     commande("\n", router)
@@ -193,7 +195,7 @@ multilink bundle-name authenticated
     sleep(1)
 
     commande("conf t", router)
-    commande("ipv6 unicast-routing",router)
+    commande("unicast-routing",router)
     commande("end",router)
 
 
@@ -205,18 +207,60 @@ multilink bundle-name authenticated
     with open(filename, 'w') as fichier:
         fichier.write(config)
 
-        
+    
+def vrf (routeur,liste_vrf) :
+    texte =  ""
+
+    for vrf in liste_vrf : 
+        texte += f"""\nvrf definition {vrf[0]}
+ rd 100:{vrf[1]}
+ route-target export 100:{vrf[2]}
+ route-target import 100:{vrf[2]}
+ !
+ address-family ipv4
+ exit-address-family
+!
+"""
+    
+    texte += """!
+no aaa new-model
+no ip icmp rate-limit unreachable
+ip cef
+!
+!
+!
+no ip domain lookup
+!
+!
+multilink bundle-name authenticated
+!
+!
+!
+ip tcp synwait-time 5
+! 
+!
+!
+"""
+    filename = os.path.join(os.path.dirname(__file__), "config_files", routeur + ".cfg")
+
+    with open(filename, 'a') as fichier:
+        fichier.write(texte)
+
+
+
 def conf_interface(routeur,interface,IGP,adresse,forwarding=None):
 
     # Créer la configuration d'une interface 
-    subnet = ipaddress.ip_network(adresse)
-    subnet_mask = str(subnet.netmask)
-    print(forwarding)
+
+
     texte = f"""\ninterface {interface}"""
     if forwarding != None :
         texte += f"""\nvrf forwarding {forwarding}"""
 
-    texte +=f"""\n ip address {adresse} {subnet_mask}"""
+    if interface == "Loopback0" :
+        texte +=f"""\n ip address {adresse} 255.255.255.255"""
+    else : 
+        texte +=f"""\n ip address {adresse} 255.255.255.252"""
 
     if forwarding == None :
         texte+=f"\n ip ospf {routeur[1:]} area 0\n"
@@ -237,7 +281,8 @@ def conf_interface(routeur,interface,IGP,adresse,forwarding=None):
     if forwarding != None :
         commande(f"vrf forwarding {forwarding}",routeur)
 
-    commande(f"ip address {adresse} {subnet_mask}",routeur)
+    #A refaire
+    #commande(f"ip address {adresse} {subnet_mask}",routeur)
 
     if forwarding == None :
         commande(f"ip ospf {routeur[1:]} area 0",routeur)
@@ -252,9 +297,9 @@ def conf_interface(routeur,interface,IGP,adresse,forwarding=None):
 
 
     if IGP == "RIP" :
-        commande(f"ipv6 rip connected enable",routeur)
+        commande(f"rip connected enable",routeur)
     elif IGP == "OSPF" :
-        commande(f"ipv6 ospf {routeur[1:]} area 0",routeur)
+        commande(f"ospf {routeur[1:]} area 0",routeur)
 
     commande("no shutdown",routeur)
 
@@ -269,43 +314,53 @@ def conf_interface(routeur,interface,IGP,adresse,forwarding=None):
 
 
 
-def conf_vpn(nom_routeur,AS,loopbacks_voisin,clients):
+def conf_vpn(nom_routeur,AS,loopbacks_voisin,clients,client,own = [],bordure = False ):
+    
+    if client == "True" : AS = 1
 
-    texte_routeur = f"""\nrouter bgp {AS}
+    texte_routeur = f"""\n!\nrouter bgp {AS}
  bgp router-id {nom_routeur[1:]}.{nom_routeur[1:]}.{nom_routeur[1:]}.{nom_routeur[1:]}
  bgp log-neighbor-changes"""
     
-    texte_family=f"""\naddress-family ipv4"""
 
-    texte_vpn ="""\n address-family vpnv4"""
+
+    texte_family=f"""\n!\naddress-family ipv4\n"""
+
+    texte_vpn ="""\n!\naddress-family vpnv4"""
 
     texte_client =""
 
 
-    for client in clients : 
-        texte_client += f"""\n address-family ipv4 vrf {client[2]}
-   neighbor {client[0]} remote-as {client[1]}
-   neighbor {client[0]} activate
-   exit-address-family
+
+    for clientt in clients : 
+        texte_client += f"""\naddress-family ipv4 vrf {clientt[0]}
+ neighbor {clientt[1]} remote-as {clientt[2][2:]}
+ neighbor {clientt[1]} activate
+exit-address-family
 !"""
     
     
     for adresse in loopbacks_voisin:
 
-        texte_routeur+=f"""\n neighbor {adresse[:-4]} remote-as {AS}
- neighbor {adresse[:-4]} update-source Loopback0"""
+        texte_routeur+=f"""\n neighbor {adresse[:-3]} remote-as {AS}
+ """
+        if client == "False":
+            texte_routeur += f"neighbor {adresse[:-3]} update-source Loopback0\n"
+
+        for add in own : 
+            texte_family += f"network {add[:-3]} mask 255.255.255.252\n"
         
-        texte_family+=f"""\n  neighbor {adresse[:-4]} activate"""
+        texte_family+=f"""\n neighbor {adresse[:-3]} activate"""
 
-        texte_vpn += f"""
-    neighbor {adresse[:-4]} activate
-    neighbor {adresse[:-4]} send-community both
-"""
+        if bordure :
+            texte_vpn += f"""
+    neighbor {adresse[:-3]} activate
+    neighbor {adresse[:-3]} send-community both"""
 
         
 
-    texte_family +=  "\nexit-address-family"
-    texte_vpn +=  "\nexit-address-family"
+    texte_family +=  "\nexit-address-family\n!"
+    texte_vpn +=  "\nexit-address-family\n!"
 
 
 
@@ -317,14 +372,15 @@ def conf_vpn(nom_routeur,AS,loopbacks_voisin,clients):
     with open(filename, 'a') as fichier:
         fichier.write(texte_routeur)
         fichier.write(texte_family)
-        fichier.write(texte_vpn)
-        fichier.write(texte_client)
+        if client == "False" and bordure :
+            fichier.write(texte_vpn)
+            fichier.write(texte_client)
     
              
  
  
     
-def conf_igp(nom,IGP,bordures) :
+def conf_igp(nom,IGP,addresses) :
     texte="""
 !
 ip forward-protocol nd
@@ -336,19 +392,20 @@ no ip http secure-server
     if IGP == "RIP" :
 
         texte += """
-ipv6 router rip connected
+router rip connected
  redistribute connected
 """
     else :
         texte += f"""
-ipv6 router ospf {nom[1:]}
+router ospf {nom[1:]}
  router-id {nom[1:]}.{nom[1:]}.{nom[1:]}.{nom[1:]}
  passive-interface Loopback0
 """
         
-        for bordure in bordures :
-            texte +=f""" passive-interface {bordure}
+    for address in addresses :
+        texte += f""" network {address[:-3]} 0.0.0.3 area 0
 """
+
    
 
 
@@ -384,20 +441,29 @@ def logic(data) :
         for routeur in data["AS"][AS]["routeurs"] :
 
             constante(routeur["nom"])
+
+            vrfs = []
             voisins = []
             clients = []
             #  clients = [nom client, adresse client, AS client]
 
+            if data["AS"][AS]["client"] == "True" :
+                own = [data["AS"][AS]["addresse"]]
+            else : own = []
+
             interfaces_bordures = []
 
-            if data["AS"][AS]["client"] == "False" :
-                conf_interface(routeur["nom"],"Loopback0",IGP,routeur["Loopback0"])
+            if routeur["etat"] == "bordure" :
+                is_bordure = True
+            else :
+                is_bordure = False
+
+
 
             for bordures in data["liens_MPLS"] :
                 for bordure in bordures :
 
                     if bordures[bordure][0] == routeur["nom"] :
-
 
 
 
@@ -418,31 +484,47 @@ def logic(data) :
 
                                         nom_vpn = data["AS"][AS_autre]["num_client"]
 
-                        
+                                        vrfs.append([nom_vpn,data["AS"][AS_autre]["rd"],data["AS"][AS_autre]["rt"]])
 
+                                        clients.append([nom_vpn,bordures[j][2],AS_autre])
+
+                        else :
+                            own.append(bordures[bordure][2]+'/30')
+
+
+            vrf(routeur["nom"],vrfs)
+
+            if data["AS"][AS]["client"] == "False" :
+
+                conf_interface(routeur["nom"],"Loopback0",IGP,routeur["Loopback0"][:-3])
+
+            else : 
+
+                conf_interface(routeur["nom"],"GigabitEthernet1/0",IGP,data["AS"][AS]["addresse"])
+
+            loopback_voisins = []
+
+            for bordures in data["liens_MPLS"] :
+                for bordure in bordures :
+                    if bordures[bordure][0] == routeur["nom"] :
+                        nom_autre = None
                         if data["AS"][AS]["client"] == "False" :
+                            nom_autre = bordures[j][0]
+                            for AS_autre in data["AS"] :
+                                for routeur_autre in data["AS"][AS_autre]["routeurs"] :
+                                    if routeur_autre["nom"] == nom_autre :
 
-                            voisin = [bordures[j][2]]
-                            for AS_bordure in data["AS"] :
-                                for routeur_bordure in data["AS"][AS_bordure]["routeurs"] :
-                                    if routeur_bordure["nom"] == bordures[j][0] :
-                                        num_AS = AS_bordure[2:]
-                                        voisin.append(num_AS)
+                                        nom_vpn = data["AS"][AS_autre]["num_client"]
+                                        conf_interface(routeur["nom"],bordures[bordure][1],IGP,bordures[bordure][2],nom_vpn)
 
+                        else : 
+                            conf_interface(routeur["nom"],bordures[bordure][1],IGP,bordures[bordure][2])
 
-                            if data["AS"][AS]["client"] == "False" :
-    
-                                for AS_voisin in data["AS"][AS]["voisins"] :
-                                    if AS_voisin[2:] == num_AS :
-                                        voisin.append(data["AS"][AS]["voisins"][AS_voisin])
-
-                        conf_interface(routeur["nom"],bordures[bordure][1],IGP,bordures[bordure][2],nom_vpn)
+                            loopback_voisins.append(bordures[j][2])
 
 
-                            
-                        
-                        
 
+            addresses_router = []
 
             for lien in data["AS"][AS]["liens"] :
                 for routeur_in_lien in lien :
@@ -450,26 +532,29 @@ def logic(data) :
                     
                         if routeur_in_lien["nom"] == routeur["nom"] :
 
+                            addresses_router.append(routeur_in_lien[list(routeur_in_lien.keys())[1]])
+
                             interface = list(routeur_in_lien.keys())[1]
-                            conf_interface(routeur["nom"],interface,IGP,routeur_in_lien[interface])
+                            conf_interface(routeur["nom"],interface,IGP,routeur_in_lien[interface][:-3])
                         else : 
                             voisins.append(routeur_in_lien["nom"])
             
-            loopback_voisins = []
 
             for voisin_lb in data["AS"][AS]["routeurs"] :
                 if voisin_lb["nom"] in voisins :
                     loopback_voisins.append(voisin_lb["Loopback0"])
-           
 
-            
+            if data["AS"][AS]["client"] == "False" :
+                conf_igp(routeur["nom"],IGP,addresses_router)
 
 
-            conf_igp(routeur["nom"],IGP,interfaces_bordures)
-            
-            conf_vpn(routeur["nom"],AS[2:],loopback_voisins,clients)
-            
-            
+
+            conf_vpn(routeur["nom"],AS[2:],loopback_voisins,clients,data["AS"][AS]["client"],own,is_bordure)
+
+    # Write the data to NAS/data/complet.json
+    complet_file = os.path.join(os.path.dirname(__file__), '..', 'data', 'complet.json')
+    with open(complet_file, 'w') as complet_data:
+        json.dump(data, complet_data)
 
 def adressage_auto(plage, nb_lien):
     plages = []
@@ -479,8 +564,8 @@ def adressage_auto(plage, nb_lien):
     if subnet_size >= nb_lien * 4:
         for i in range(nb_lien):
 
-            IP1 = str(subnet.network_address + i * 4 + 4) + "/30"
-            IP2 = str(subnet.network_address + i * 4 + 8) + "/30"
+            IP1 = str(subnet.network_address + i * 4 + 1) + "/30"
+            IP2 = str(subnet.network_address + i * 4 + 2) + "/30"
 
             plages.append([IP1,IP2])
 
@@ -532,7 +617,7 @@ def commande(cmd,routeur) :
 
 
 
-repertoire_projet = "C:\\Users\\Gauthier\\GNS3\\projects\\GNS3_project1"
+repertoire_projet = "C:\\Users\\Gauthier\\GNS3\\projects\\vrf"
 json_file = "C:\\Users\\Gauthier\\Desktop\\TC\\TC3\\PROJETS_S2\\NAS\\NAS\\data\\data.json"
 project_name = os.path.basename(repertoire_projet)
 
@@ -545,4 +630,4 @@ if envoi_telnet :
 
 logic(intentions)
 
-#drag_and_drop(repertoire_projet)
+drag_and_drop(repertoire_projet)
