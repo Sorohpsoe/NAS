@@ -316,7 +316,7 @@ def conf_interface(routeur,interface,IGP,adresse,forwarding=None):
 
 def conf_vpn(nom_routeur,AS,loopbacks_voisin,clients,client,own = [],bordure = False ):
     
-    if client == "True" : AS = 1
+    
 
     texte_routeur = f"""\n!\nrouter bgp {AS}
  bgp router-id {nom_routeur[1:]}.{nom_routeur[1:]}.{nom_routeur[1:]}.{nom_routeur[1:]}
@@ -338,7 +338,7 @@ def conf_vpn(nom_routeur,AS,loopbacks_voisin,clients,client,own = [],bordure = F
  neighbor {clientt[1]} activate
 exit-address-family
 !"""
-    
+    if client == "True" : AS = 1
     
     for adresse in loopbacks_voisin:
 
@@ -348,9 +348,14 @@ exit-address-family
             texte_routeur += f"neighbor {adresse[:-3]} update-source Loopback0\n"
 
         for add in own : 
-            texte_family += f"network {add[:-3]} mask 255.255.255.252\n"
+            adresse_reseau = add[:-3]
+            last_character = adresse_reseau[-1]
+            new_character = str(int(last_character) - 1)
+            adresse_reseau = adresse_reseau[:-1] + new_character
+            print(adresse_reseau)
+            texte_family += f" network {adresse_reseau} mask 255.255.255.252\n"
         
-        texte_family+=f"""\n neighbor {adresse[:-3]} activate"""
+        texte_family+=f""" neighbor {adresse[:-3]} activate"""
 
         if bordure :
             texte_vpn += f"""
@@ -617,8 +622,10 @@ def commande(cmd,routeur) :
 
 
 
-repertoire_projet = "C:\\Users\\Gauthier\\GNS3\\projects\\vrf"
-json_file = "C:\\Users\\Gauthier\\Desktop\\TC\\TC3\\PROJETS_S2\\NAS\\NAS\\data\\data.json"
+repertoire_projet_G = "C:\\Users\\Gauthier\\GNS3\\projects\\vrf"
+repertoire_projet="C:\\Users\\baptr\\GNS3\\projects\\NAS_2"
+json_file_G = "C:\\Users\\Gauthier\\Desktop\\TC\\TC3\\PROJETS_S2\\NAS\\NAS\\data\\data.json"
+json_file = "C:\\Users\\baptr\\Documents\\INSA\\TC\\Projet NAS\\NAS\\data\\data.json"
 project_name = os.path.basename(repertoire_projet)
 
 intentions = load_data(json_file)
