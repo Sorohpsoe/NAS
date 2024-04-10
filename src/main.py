@@ -222,6 +222,8 @@ def vrf (routeur,liste_vrf) :
         commande(f"rd 100:{vrf[1]}", routeur)
         commande(f"route-target export 100:{vrf[2]}", routeur)
         commande(f"route-target import 100:{vrf[2]}", routeur)
+        commande("address-family ipv4", routeur)
+        commande("exit-address-family", routeur)
         commande("end", routeur)
         
 
@@ -628,7 +630,7 @@ def commande(cmd,routeur) :
 
 
 
-repertoire_projet_V = "/home/vincent/Documents/INSA TC/Cours/Réseau/NAS/Projet NAS/NAS_project"
+repertoire_projet_V = "/home/vincent/Documents/INSA TC/Cours/Réseau/NAS/Projet NAS/NAS_without_config"
 repertoire_projet_G = "C:\\Users\\Gauthier\\GNS3\\projects\\vrf"
 repertoire_projet="C:\\Users\\baptr\\GNS3\\projects\\NAS_2"
 json_file_V = "/home/vincent/Documents/INSA TC/Cours/Réseau/NAS/Projet NAS/NAS_git/data/data.json"
