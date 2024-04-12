@@ -41,23 +41,23 @@ def lister_routers(repertoire_projet) :
     #Trouve les fichiers configs de chaques routeurs dans le repertoire_projet
     ##
 
-    repertoire_courant =  repertoire_projet + "\\project-files\\dynamips"    
+    repertoire_courant =  repertoire_projet + "/project-files/dynamips"    
 
     routers_list = {}
 
     if os.path.exists(repertoire_courant):
         #Création d'une liste avec tous les dossiers des routeurs
-        dossiers = [repertoire_courant+"\\"+nom for nom in os.listdir(repertoire_courant) if os.path.isdir(os.path.join(repertoire_courant, nom))]
+        dossiers = [repertoire_courant+"/"+nom for nom in os.listdir(repertoire_courant) if os.path.isdir(os.path.join(repertoire_courant, nom))]
 
         for router in dossiers :
             #Création du chemin vers le .cfg
-            chemin = router + "\\configs"
+            chemin = router + "/configs"
             config_file=""
             for nom_fichier in os.listdir(chemin) :
 
                 #Recherche du fichier de config au démarrage
                 if nom_fichier.endswith(".cfg") and 'startup' in nom_fichier:
-                    config_file = chemin + "\\" + nom_fichier
+                    config_file = chemin + "/" + nom_fichier
 
             #Lecture du .cfg pour determiner à quel router il appartient
             with open(config_file, 'r') as config : 
@@ -194,11 +194,6 @@ boot-end-marker
 
     sleep(1)
 
-    commande("conf t", router)
-    commande("unicast-routing",router)
-    commande("end",router)
-
-
 
     # Obtenir le chemin complet du fichier dans le dossier config_files
     filename = os.path.join(os.path.dirname(__file__), "config_files", router + ".cfg")
@@ -221,6 +216,17 @@ def vrf (routeur,liste_vrf) :
  exit-address-family
 !
 """
+        commande("enable", routeur)
+        commande("conf t", routeur)
+        commande(f"vrf definition {vrf[0]}", routeur)
+        commande(f"rd 100:{vrf[1]}", routeur)
+        commande(f"route-target export 100:{vrf[2]}", routeur)
+        commande(f"route-target import 100:{vrf[2]}", routeur)
+        commande("address-family ipv4", routeur)
+        commande("exit-address-family", routeur)
+        commande("end", routeur)
+        
+
     
     texte += """!
 no aaa new-model
@@ -241,6 +247,7 @@ ip tcp synwait-time 5
 !
 !
 """
+
     filename = os.path.join(os.path.dirname(__file__), "config_files", routeur + ".cfg")
 
     with open(filename, 'a') as fichier:
@@ -254,56 +261,33 @@ def conf_interface(routeur,interface,IGP,adresse,forwarding=None):
 
 
     texte = f"""\ninterface {interface}"""
+    commande("enable", routeur)
+    commande("conf t", routeur)
+    commande(f"interface {interface}", routeur)
     if forwarding != None :
         texte += f"""\nvrf forwarding {forwarding}"""
+        commande(f"vrf forwarding {forwarding}", routeur)
 
     if interface == "Loopback0" :
         texte +=f"""\n ip address {adresse} 255.255.255.255"""
+        commande(f"ip address {adresse} 255.255.255.255", routeur)
     else : 
         texte +=f"""\n ip address {adresse} 255.255.255.252"""
+        commande(f"ip address {adresse} 255.255.255.252", routeur)
 
     if forwarding == None :
         texte+=f"\n ip ospf {routeur[1:]} area 0\n"
-
-
-
-
-    #A changer
-    if interface!="Loopback0":
-        texte+=""" \n negotiation auto
- mpls ip"""
+        commande(f"ip ospf {routeur[1:]} area 0", routeur)
  
     texte += "\n!"
     #Envoi des commande avec telnet
-
-    commande("conf t",routeur)
-    commande(f"interface {interface}",routeur)
-    if forwarding != None :
-        commande(f"vrf forwarding {forwarding}",routeur)
-
-    #A refaire
-    #commande(f"ip address {adresse} {subnet_mask}",routeur)
-
-    if forwarding == None :
-        commande(f"ip ospf {routeur[1:]} area 0",routeur)
 
     if interface != "Loopback0" :
         commande("negotiation auto",routeur)
         commande("mpls ip",routeur)
 
     commande("no shutdown",routeur)
-
-
-
-
-    if IGP == "RIP" :
-        commande(f"rip connected enable",routeur)
-    elif IGP == "OSPF" :
-        commande(f"ospf {routeur[1:]} area 0",routeur)
-
-    commande("no shutdown",routeur)
-
-    commande("end",routeur)
+    commande("end", routeur)
 
 
     # Ouvrir le fichier et ajouter les informations à la fin
@@ -321,14 +305,22 @@ def conf_vpn(nom_routeur,AS,loopbacks_voisin,clients,client,own = [],bordure = F
     texte_routeur = f"""\n!\nrouter bgp {AS}
  bgp router-id {nom_routeur[1:]}.{nom_routeur[1:]}.{nom_routeur[1:]}.{nom_routeur[1:]}
  bgp log-neighbor-changes"""
-    
+ 
+    commande_routeur = "end\n"
+    commande_routeur += "enable\n"
+    commande_routeur += "conf t\n"
+    commande_routeur = f"router bgp {AS}\n"
+    commande_routeur += f" bgp router-id {nom_routeur[1:]}.{nom_routeur[1:]}.{nom_routeur[1:]}.{nom_routeur[1:]}\n"
 
 
     texte_family=f"""\n!\naddress-family ipv4\n"""
+    commande_family = "address-family ipv4\n"
 
     texte_vpn ="""\n!\naddress-family vpnv4"""
+    commande_vpn ="address-family vpnv4\n"
 
     texte_client =""
+    commande_client = ""
 
 
 
@@ -338,14 +330,20 @@ def conf_vpn(nom_routeur,AS,loopbacks_voisin,clients,client,own = [],bordure = F
  neighbor {clientt[1]} activate
 exit-address-family
 !"""
+        commande_client += f"address-family ipv4 vrf {clientt[0]}\n"
+        commande_client += f" neighbor {clientt[1]} remote-as {clientt[2][2:]}\n"
+        commande_client += f" neighbor {clientt[1]} activate\n"
+
     if client == "True" : AS = 1
     
     for adresse in loopbacks_voisin:
 
         texte_routeur+=f"""\n neighbor {adresse[:-3]} remote-as {AS}
  """
+        commande_routeur += f" neighbor {adresse[:-3]} remote-as {AS}\n"
         if client == "False":
             texte_routeur += f"neighbor {adresse[:-3]} update-source Loopback0\n"
+            commande_routeur += f"neighbor {adresse[:-3]} update-source Loopback0\n"
 
         for add in own : 
             adresse_reseau = add[:-3]
@@ -354,13 +352,17 @@ exit-address-family
             adresse_reseau = adresse_reseau[:-1] + new_character
             print(adresse_reseau)
             texte_family += f" network {adresse_reseau} mask 255.255.255.252\n"
+            commande_family += f" network {adresse_reseau} mask 255.255.255.252\n"
         
         texte_family+=f""" neighbor {adresse[:-3]} activate"""
+        commande_family += f" neighbor {adresse[:-3]} activate\n"
 
         if bordure :
             texte_vpn += f"""
     neighbor {adresse[:-3]} activate
     neighbor {adresse[:-3]} send-community both"""
+            commande_vpn += f" neighbor {adresse[:-3]} activate\n"
+            commande_vpn += f" neighbor {adresse[:-3]} send-community both\n"
 
         
 
@@ -375,14 +377,22 @@ exit-address-family
 
     # Écrire la configuration dans le fichier spécifié
     with open(filename, 'a') as fichier:
+        commande("enable", nom_routeur)
+        commande("conf t", nom_routeur)
         fichier.write(texte_routeur)
+        for comm in commande_routeur.splitlines():
+                commande(comm, nom_routeur)
         fichier.write(texte_family)
+        for comm in commande_family.splitlines():
+                commande(comm, nom_routeur)
         if client == "False" and bordure :
             fichier.write(texte_vpn)
+            for comm in commande_vpn.splitlines():
+                commande(comm, nom_routeur)
             fichier.write(texte_client)
-    
-             
- 
+            for comm in commande_client.splitlines():
+                commande(comm, nom_routeur)
+        commande("end", nom_routeur)
  
     
 def conf_igp(nom,IGP,addresses) :
@@ -393,7 +403,9 @@ ip forward-protocol nd
 !
 no ip http server
 no ip http secure-server
-!"""    
+!"""
+    commande("enable", nom)
+    commande("conf t", nom)
     if IGP == "RIP" :
 
         texte += """
@@ -406,25 +418,22 @@ router ospf {nom[1:]}
  router-id {nom[1:]}.{nom[1:]}.{nom[1:]}.{nom[1:]}
  passive-interface Loopback0
 """
+    commande(f"router ospf {nom[1:]}", nom)
+    commande(f"router-id {nom[1:]}.{nom[1:]}.{nom[1:]}.{nom[1:]}", nom)
+    commande(f"passive-interface Loopback0", nom)
         
     for address in addresses :
         texte += f""" network {address[:-3]} 0.0.0.3 area 0
 """
+        commande(f"network {address[:-3]} 0.0.0.3 area 0",nom)
+    commande("end", nom)
 
    
-
-
-
-
-
     filename = os.path.join(os.path.dirname(__file__), "config_files", nom + ".cfg")
 
     # Écrire la configuration dans le fichier spécifié
     with open(filename, 'a') as fichier:
         fichier.write(texte)
-
-
-
 
 
 
@@ -621,20 +630,21 @@ def commande(cmd,routeur) :
 
 
 
-
+repertoire_projet_V = "/home/vincent/Documents/INSA TC/Cours/Réseau/NAS/Projet NAS/NAS_without_config"
 repertoire_projet_G = "C:\\Users\\Gauthier\\GNS3\\projects\\vrf"
 repertoire_projet="C:\\Users\\baptr\\GNS3\\projects\\NAS_2"
+json_file_V = "/home/vincent/Documents/INSA TC/Cours/Réseau/NAS/Projet NAS/NAS_git/data/data.json"
 json_file_G = "C:\\Users\\Gauthier\\Desktop\\TC\\TC3\\PROJETS_S2\\NAS\\NAS\\data\\data.json"
 json_file = "C:\\Users\\baptr\\Documents\\INSA\\TC\\Projet NAS\\NAS\\data\\data.json"
-project_name = os.path.basename(repertoire_projet)
+project_name = os.path.basename(repertoire_projet_V)
 
-intentions = load_data(json_file)
+intentions = load_data(json_file_V)
 
-envoi_telnet = False
+envoi_telnet = True
 
 if envoi_telnet :
     noeuds = start_telnet(project_name)
 
 logic(intentions)
 
-drag_and_drop(repertoire_projet)
+#drag_and_drop(repertoire_projet_V)
